@@ -27,21 +27,39 @@ public class EcommerceService {
 
     // Constructor initializes database DAOs and loads products from MySQL
     public EcommerceService() {
+        this(new ProductDAO(), new CustomerDAO(), new CartDAO(), new OrderService(), new OtpService());
+    }
+
+    // Overloaded constructor for dependency injection and testing
+    public EcommerceService(ProductDAO productDAO, CustomerDAO customerDAO, CartDAO cartDAO,
+                            OrderService orderService, OtpService otpService) {
         this.productCatalog = new ArrayList<>();
         this.userRegistry = new HashMap<>();
-        this.orderService = new OrderService();
-        this.otpService = new OtpService();
+        this.orderService = (orderService != null) ? orderService : new OrderService();
+        this.otpService = (otpService != null) ? otpService : new OtpService();
         this.cart = new Cart();
         this.currentUser = null;
-        this.productDAO = new ProductDAO();
-        this.customerDAO = new CustomerDAO();
-        this.cartDAO = new CartDAO();
+        this.productDAO = productDAO;
+        this.customerDAO = customerDAO;
+        this.cartDAO = cartDAO;
 
-        loadProductsFromDatabase(); // Load products from MySQL database
+        if (this.productDAO != null) {
+            loadProductsFromDatabase(); // Load products from MySQL database
+        }
+    }
+
+    // Helper method to add product to in-memory catalog
+    public void addProductToCatalog(Product product) {
+        if (product != null) {
+            this.productCatalog.add(product);
+        }
     }
 
     // Refresh products in memory from the MySQL database
     public void refreshProductCatalog() {
+        if (productDAO == null) {
+            return;
+        }
         try {
             List<Product> products = productDAO.getAllProducts();
             productCatalog.clear();
@@ -119,14 +137,16 @@ public class EcommerceService {
                 return product;
             }
         }
-        try {
-            Product p = productDAO.getProductById(productId);
-            if (p != null) {
-                productCatalog.add(p);
-                return p;
+        if (productDAO != null) {
+            try {
+                Product p = productDAO.getProductById(productId);
+                if (p != null) {
+                    productCatalog.add(p);
+                    return p;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
         return null;
     }
@@ -206,20 +226,24 @@ public class EcommerceService {
         }
 
         // If the user is not in memory, search MySQL.
-        try {
-            User user = customerDAO.findByIdentifier(identifier.trim());
+        if (customerDAO != null) {
+            try {
+                User user = customerDAO.findByIdentifier(identifier.trim());
 
-            if (user != null) {
-                userRegistry.put(user.getUsername().toLowerCase(), user);
+                if (user != null) {
+                    userRegistry.put(user.getUsername().toLowerCase(), user);
+                }
+
+                return user;
+
+            } catch (SQLException e) {
+                System.out.println("Unable to find customer in database.");
+                e.printStackTrace();
+                return null;
             }
-
-            return user;
-
-        } catch (SQLException e) {
-            System.out.println("Unable to find customer in database.");
-            e.printStackTrace();
-            return null;
         }
+
+        return null;
     }
 
     // Check if a user is registered by username, phone, or email
@@ -318,6 +342,9 @@ public class EcommerceService {
 
     // Synchronize guest cart items and database cart upon login
     private void synchronizeCartOnLogin(User user) {
+        if (cartDAO == null) {
+            return;
+        }
         try {
             if (!cart.isEmpty()) {
                 cartDAO.mergeGuestCart(user.getUserId(), cart, productDAO);
@@ -332,6 +359,9 @@ public class EcommerceService {
     // Load persistent cart items from MySQL into the in-memory cart
     public void loadCartFromDatabase(int customerId) {
         cart.clear();
+        if (cartDAO == null) {
+            return;
+        }
         try {
             List<Cart.CartItem> dbItems = cartDAO.getCartByCustomerId(customerId);
             for (Cart.CartItem item : dbItems) {
@@ -398,13 +428,15 @@ public class EcommerceService {
 
         // Get latest stock from database if available
         int availableStock = product.getQuantity();
-        try {
-            int liveStock = productDAO.getStock(product.getId());
-            if (liveStock >= 0) {
-                availableStock = liveStock;
-                product.setStock(liveStock);
+        if (productDAO != null) {
+            try {
+                int liveStock = productDAO.getStock(product.getId());
+                if (liveStock >= 0) {
+                    availableStock = liveStock;
+                    product.setStock(liveStock);
+                }
+            } catch (SQLException ignored) {
             }
-        } catch (SQLException ignored) {
         }
 
         int currentQtyInCart = cart.getQuantity(product.getId());
@@ -416,7 +448,7 @@ public class EcommerceService {
             return false;
         }
 
-        if (isLoggedIn()) {
+        if (isLoggedIn() && cartDAO != null) {
             try {
                 cartDAO.addToCart(currentUser.getUserId(), product.getId(), quantity);
             } catch (SQLException e) {
@@ -444,7 +476,7 @@ public class EcommerceService {
             return;
         }
 
-        if (isLoggedIn()) {
+        if (isLoggedIn() && cartDAO != null) {
             try {
                 cartDAO.removeFromCart(currentUser.getUserId(), productId);
             } catch (SQLException e) {
