@@ -23,6 +23,7 @@ public class Order {
         }
 
         public int getProductId() {
+
             return productId;
         }
 
@@ -53,17 +54,22 @@ public class Order {
     private double totalAmount;
     private String status;
 
-    // Constructor with address and payment method
-    public Order(int orderId, int userId, String customerName, String deliveryAddress, String paymentMethod, List<OrderItem> items, double totalAmount) {
+    // Constructor with address, payment method, order date, and status (used when loading from DB)
+    public Order(int orderId, int userId, String customerName, String deliveryAddress, String paymentMethod, LocalDateTime orderDate, List<OrderItem> items, double totalAmount, String status) {
         this.orderId = orderId;
         this.userId = userId;
         this.customerName = customerName;
         this.deliveryAddress = deliveryAddress;
         this.paymentMethod = paymentMethod;
-        this.orderDate = LocalDateTime.now();
+        this.orderDate = orderDate != null ? orderDate : LocalDateTime.now();
         this.items = new ArrayList<>(items);
         this.totalAmount = totalAmount;
-        this.status = "CONFIRMED";
+        this.status = status != null ? status : "CONFIRMED";
+    }
+
+    // Constructor with address and payment method
+    public Order(int orderId, int userId, String customerName, String deliveryAddress, String paymentMethod, List<OrderItem> items, double totalAmount) {
+        this(orderId, userId, customerName, deliveryAddress, paymentMethod, LocalDateTime.now(), items, totalAmount, "CONFIRMED");
     }
 
     // Overloaded constructor for default address/payment
@@ -137,13 +143,11 @@ public class Order {
         System.out.printf("%-8s | %-25s | %-12s | %-10s | %-12s%n",
                 "Prod ID", "Product Name", "Price (Rs)", "Quantity", "Subtotal");
         System.out.println("--------------------------------------------------------------------------------");
-
         for (OrderItem item : items) {
             System.out.printf("%-8d | %-25s | %-12.2f | %-10d | %-12.2f%n",
                     item.getProductId(), item.getProductName(), item.getUnitPrice(),
                     item.getQuantity(), item.getSubtotal());
         }
-
         System.out.println("--------------------------------------------------------------------------------");
         System.out.printf(" Grand Total      : Rs %.2f%n", totalAmount);
         System.out.println("================================================================================");

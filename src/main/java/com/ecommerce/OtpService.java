@@ -17,7 +17,6 @@ public class OtpService {
         int otp = 1000 + random.nextInt(9000);
         return String.valueOf(otp);
     }
-
     // Predicate to validate phone number format (must be 10 digits)
     public boolean validatePhoneNumber(String phone) {
         Predicate<String> phonePredicate = p -> p != null && p.trim().matches("\\d{10}");
@@ -35,7 +34,6 @@ public class OtpService {
         };
         smsConsumer.accept(phone);
     }
-
     // Predicate to verify if entered OTP matches generated OTP
     // Checks weathe The otp :::
 

@@ -25,12 +25,9 @@ public class User {
         this(userId, fullName, username, password, email, "");
     }
 
-    // Verify password for login
+    // Verifies the entered password against the stored password hash.
     public boolean checkPassword(String candidatePassword) {
-        if (candidatePassword == null || this.password == null) {
-            return false;
-        }
-        return this.password.equals(candidatePassword);
+        return PasswordUtil.verifyPassword(candidatePassword, this.password);
     }
 
     // Getters and Setters

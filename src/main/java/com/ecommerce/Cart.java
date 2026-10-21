@@ -68,6 +68,19 @@ public class Cart {
         return true;
     }
 
+    // Set item directly (e.g., when syncing from database)
+    public void setItem(Product product, int quantity) {
+        if (product != null && quantity > 0) {
+            items.put(product.getId(), new CartItem(product, quantity));
+        }
+    }
+
+    // Get current quantity of a product in the cart
+    public int getQuantity(int productId) {
+        CartItem item = items.get(productId);
+        return item != null ? item.getQuantity() : 0;
+    }
+
     // Remove item from cart by product ID
     public boolean removeItem(int productId) {
         return items.remove(productId) != null;
@@ -116,6 +129,7 @@ public class Cart {
             System.out.printf("%-7d | %-25s | %-12.2f | %-10d | %-12.2f%n",
                     p.getId(), p.getName(), p.getPrice(), item.getQuantity(), item.getSubtotal());
         }
+
 
         System.out.println("--------------------------------------------------------------------------------");
         System.out.printf("Total Cart Value: Rs %.2f%n", getTotalAmount());

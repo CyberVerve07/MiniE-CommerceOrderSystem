@@ -291,7 +291,11 @@ public class Main {
 
                 if (service.getOtpService().verifyOtp(enteredOtp, otp)) {
                     User user = service.findUserByIdentifier(identifier);
-                    service.loginUser(identifier, user.getPassword());
+                    if (user != null) {
+                        service.loginUserWithOtp(user);
+                    } else {
+                        System.out.println("Login failed: User not found.");
+                    }
                     return;
                 } else {
                     System.out.println("Login failed: Incorrect OTP entered.");

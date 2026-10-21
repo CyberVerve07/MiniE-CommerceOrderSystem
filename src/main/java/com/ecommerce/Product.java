@@ -111,11 +111,13 @@ public class Product {
 
     // Formatted rating string for display
     public String getRatingDisplay() {
+
         return String.format("%.1f/5.0 (%d reviews)", rating, reviewCount);
     }
 
     @Override
     public String toString() {
+
         return String.format("%-4d %-18s %-12.2f %-10d %s", id, name, price, quantity, getRatingDisplay());
     }
 }

@@ -1,5 +1,10 @@
 package com.ecommerce;
 
+import com.ecommerce.dao.CartDAO;
+import com.ecommerce.dao.CustomerDAO;
+import com.ecommerce.dao.ProductDAO;
+
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -16,9 +21,11 @@ public class EcommerceService {
     private final OtpService otpService;
     private final Cart cart;
     private User currentUser;
-    private int nextUserId = 101;
+    private final ProductDAO productDAO;
+    private final CustomerDAO customerDAO;
+    private final CartDAO cartDAO;
 
-    // Constructor initializes in-memory data
+    // Constructor initializes database DAOs and loads products from MySQL
     public EcommerceService() {
         this.productCatalog = new ArrayList<>();
         this.userRegistry = new HashMap<>();
@@ -26,29 +33,34 @@ public class EcommerceService {
         this.otpService = new OtpService();
         this.cart = new Cart();
         this.currentUser = null;
+        this.productDAO = new ProductDAO();
+        this.customerDAO = new CustomerDAO();
+        this.cartDAO = new CartDAO();
 
-        seedSampleData();
+        loadProductsFromDatabase(); // Load products from MySQL database
     }
 
-    // Populate initial sample products with ratings and review counts
-    private void seedSampleData() {
-        productCatalog.add(new Product(1, "Laptop", 50000.00, 6, 4.8, 142));
-        productCatalog.add(new Product(2, "Mouse", 500.00, 50, 4.5, 280));
-        productCatalog.add(new Product(3, "Keyboard", 1200.00, 30, 4.6, 195));
-        productCatalog.add(new Product(4, "Monitor", 15000.00, 15, 4.7, 88));
-        productCatalog.add(new Product(5, "Headphones", 2500.00, 20, 4.4, 310));
-        productCatalog.add(new Product(6, "Webcam", 1800.00, 12, 4.2, 64));
-        productCatalog.add(new Product(7, "USB Cable", 250.00, 100, 4.1, 520));
-        productCatalog.add(new Product(8, "SSD 1TB", 6500.00, 8, 4.9, 415));
+    // Refresh products in memory from the MySQL database
+    public void refreshProductCatalog() {
+        try {
+            List<Product> products = productDAO.getAllProducts();
+            productCatalog.clear();
+            productCatalog.addAll(products);
+        } catch (SQLException e) {
+            System.out.println("Failed to load products from MySQL.");
+            e.printStackTrace();
+        }
     }
 
     // Display all products
     public void displayAllProducts() {
+        refreshProductCatalog();
         displayProducts(productCatalog, "PRODUCT LIST");
     }
 
     // Sort products by rating using Comparator (Highest to Lowest)
     public void displayProductsSortedByRating() {
+        refreshProductCatalog();
         List<Product> sortedList = new ArrayList<>(productCatalog);
         sortedList.sort(Comparator.comparingDouble(Product::getRating).reversed());
         displayProducts(sortedList, "TOP RATED PRODUCTS (BY RATING)");
@@ -56,6 +68,7 @@ public class EcommerceService {
 
     // Sort products by price using Comparator (Lowest to Highest)
     public void displayProductsSortedByPrice() {
+        refreshProductCatalog();
         List<Product> sortedList = new ArrayList<>(productCatalog);
         sortedList.sort(Comparator.comparingDouble(Product::getPrice));
         displayProducts(sortedList, "PRODUCTS BY PRICE (LOW TO HIGH)");
@@ -63,6 +76,7 @@ public class EcommerceService {
 
     // Search products by name or keyword
     public List<Product> searchProductsByName(String query) {
+        refreshProductCatalog();
         List<Product> matches = new ArrayList<>();
         if (query == null || query.trim().isEmpty()) {
             return matches;
@@ -83,6 +97,7 @@ public class EcommerceService {
             return null;
         }
 
+        refreshProductCatalog();
         String trimmed = name.trim();
         for (Product product : productCatalog) {
             if (product.getName().equalsIgnoreCase(trimmed)) {
@@ -104,11 +119,21 @@ public class EcommerceService {
                 return product;
             }
         }
+        try {
+            Product p = productDAO.getProductById(productId);
+            if (p != null) {
+                productCatalog.add(p);
+                return p;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         return null;
     }
 
     // Display specific product details by Name or ID
     public void displayProductDetails(String input) {
+        refreshProductCatalog();
         Product p = null;
         try {
             int id = Integer.parseInt(input.trim());
@@ -144,12 +169,7 @@ public class EcommerceService {
             System.out.println("No products found.");
         } else {
             for (Product product : products) {
-                System.out.printf("%-5d %-18s %-12.2f %-10d %s%n",
-                        product.getId(),
-                        product.getName(),
-                        product.getPrice(),
-                        product.getQuantity(),
-                        product.getRatingDisplay());
+                System.out.printf("%-5d %-18s %-12.2f %-10d %s%n", product.getId(), product.getName(), product.getPrice(), product.getQuantity(), product.getRatingDisplay());
             }
         }
         System.out.println("============================================================================");
@@ -160,7 +180,7 @@ public class EcommerceService {
         return Collections.unmodifiableList(productCatalog);
     }
 
-    // Find user by username, phone number, or email
+    // Finds a customer by username, phone number, or email.
     public User findUserByIdentifier(String identifier) {
         if (identifier == null || identifier.trim().isEmpty()) {
             return null;
@@ -168,22 +188,38 @@ public class EcommerceService {
 
         String searchKey = identifier.trim().toLowerCase();
 
-        // 1. Direct username lookup
+        // First, search users already loaded in Java memory.
         if (userRegistry.containsKey(searchKey)) {
             return userRegistry.get(searchKey);
         }
 
-        // 2. Lookup by phone number or email
         for (User user : userRegistry.values()) {
-            if (user.getPhoneNumber() != null && user.getPhoneNumber().trim().equalsIgnoreCase(identifier.trim())) {
+            if (user.getPhoneNumber() != null
+                    && user.getPhoneNumber().equalsIgnoreCase(identifier.trim())) {
                 return user;
             }
-            if (user.getEmail() != null && user.getEmail().trim().equalsIgnoreCase(searchKey)) {
+
+            if (user.getEmail() != null
+                    && user.getEmail().equalsIgnoreCase(identifier.trim())) {
                 return user;
             }
         }
 
-        return null;
+        // If the user is not in memory, search MySQL.
+        try {
+            User user = customerDAO.findByIdentifier(identifier.trim());
+
+            if (user != null) {
+                userRegistry.put(user.getUsername().toLowerCase(), user);
+            }
+
+            return user;
+
+        } catch (SQLException e) {
+            System.out.println("Unable to find customer in database.");
+            e.printStackTrace();
+            return null;
+        }
     }
 
     // Check if a user is registered by username, phone, or email
@@ -191,35 +227,58 @@ public class EcommerceService {
         return findUserByIdentifier(identifier) != null;
     }
 
-    // Register user with phone number and email (either can be skipped)
+    // Registers a customer and saves their details in MySQL.
     public boolean registerUser(String fullName, String username, String password, String email, String phoneNumber) {
         if (username == null || username.trim().isEmpty()) {
-            System.out.println("Registration failed: Username cannot be empty.");
+            System.out.println("Username cannot be empty.");
             return false;
         }
-
         if (password == null || password.trim().length() < 6) {
-            System.out.println("Registration failed: Password must be at least 6 characters long.");
+            System.out.println("Password must be at least 6 characters.");
             return false;
         }
 
-        String key = username.trim().toLowerCase();
-        if (userRegistry.containsKey(key)) {
-            System.out.println("Registration failed: Username '" + username + "' is already registered.");
+        String trimmedUser = username.trim();
+        String trimmedEmail = (email != null && !email.trim().isEmpty()) ? email.trim() : null;
+        String trimmedPhone = (phoneNumber != null && !phoneNumber.trim().isEmpty()) ? phoneNumber.trim() : null;
+
+        try {
+            if (customerDAO.isUsernameTaken(trimmedUser)) {
+                System.out.println("Registration failed: Username '" + trimmedUser + "' is already taken. Please choose another username.");
+                return false;
+            }
+            if (trimmedEmail != null && customerDAO.isEmailTaken(trimmedEmail)) {
+                System.out.println("Registration failed: Email '" + trimmedEmail + "' is already registered.");
+                return false;
+            }
+            if (trimmedPhone != null && customerDAO.isPhoneTaken(trimmedPhone)) {
+                System.out.println("Registration failed: Phone number '" + trimmedPhone + "' is already registered.");
+                return false;
+            }
+        } catch (SQLException e) {
+            System.out.println("Database error during registration validation.");
+            e.printStackTrace();
             return false;
         }
 
-        String name = (fullName == null || fullName.trim().isEmpty()) ? username.trim() : fullName.trim();
-        String mail = (email == null) ? "" : email.trim();
-        String phone = (phoneNumber == null) ? "" : phoneNumber.trim();
+        String name = (fullName == null || fullName.trim().isEmpty()) ? trimmedUser : fullName.trim();
+        User newUser = new User(0, name, trimmedUser, password.trim(), trimmedEmail, trimmedPhone);
 
-        User newUser = new User(nextUserId++, name, username.trim(), password.trim(), mail, phone);
-        userRegistry.put(key, newUser);
-        System.out.println("Registration successful! Welcome, " + name + ".");
-        return true;
+        try {
+            if (customerDAO.registerCustomer(newUser)) {
+                userRegistry.put(trimmedUser.toLowerCase(), newUser);
+                System.out.println("Registration successful! Welcome, " + name + ".");
+                return true;
+            }
+        } catch (SQLException e) {
+            System.out.println("Registration failed. Username, email, or phone number may already exist.");
+            e.printStackTrace();
+        }
+
+        return false;
     }
 
-    // Login user with username, phone number, or email
+    // Login user with username, phone number, or email and password
     public boolean loginUser(String identifier, String password) {
         if (identifier == null || password == null) {
             System.out.println("Login failed: Username/Phone/Email and password cannot be empty.");
@@ -239,15 +298,68 @@ public class EcommerceService {
         }
 
         this.currentUser = user;
+        synchronizeCartOnLogin(user);
         System.out.println("Welcome back, " + user.getFullName() + "! You are now logged in.");
         return true;
     }
 
-    // Logout user
+    // Login user directly via verified OTP without password hash comparison
+    public boolean loginUserWithOtp(User user) {
+        if (user == null) {
+            System.out.println("Login failed: User not found.");
+            return false;
+        }
+
+        this.currentUser = user;
+        synchronizeCartOnLogin(user);
+        System.out.println("Welcome back, " + user.getFullName() + "! You are now logged in.");
+        return true;
+    }
+
+    // Synchronize guest cart items and database cart upon login
+    private void synchronizeCartOnLogin(User user) {
+        try {
+            if (!cart.isEmpty()) {
+                cartDAO.mergeGuestCart(user.getUserId(), cart, productDAO);
+            }
+            loadCartFromDatabase(user.getUserId());
+        } catch (SQLException e) {
+            System.out.println("Failed to synchronize cart with database.");
+            e.printStackTrace();
+        }
+    }
+
+    // Load persistent cart items from MySQL into the in-memory cart
+    public void loadCartFromDatabase(int customerId) {
+        cart.clear();
+        try {
+            List<Cart.CartItem> dbItems = cartDAO.getCartByCustomerId(customerId);
+            for (Cart.CartItem item : dbItems) {
+                int stock = item.getProduct().getQuantity();
+                int qty = item.getQuantity();
+                if (qty > stock) {
+                    qty = stock;
+                    if (qty > 0) {
+                        cartDAO.updateQuantity(customerId, item.getProduct().getId(), qty);
+                    } else {
+                        cartDAO.removeFromCart(customerId, item.getProduct().getId());
+                        continue;
+                    }
+                }
+                cart.setItem(item.getProduct(), qty);
+            }
+        } catch (SQLException e) {
+            System.out.println("Failed to load cart from database.");
+            e.printStackTrace();
+        }
+    }
+
+    // Logout user and reset in-memory cart for the guest session
     public void logoutUser() {
         if (this.currentUser != null) {
             System.out.println("Logged out successfully. Goodbye, " + currentUser.getFullName() + "!");
             this.currentUser = null;
+            this.cart.clear();
         } else {
             System.out.println("No active user is currently logged in.");
         }
@@ -263,6 +375,7 @@ public class EcommerceService {
 
     // Add product to cart by product ID
     public boolean addProductToCart(int productId, int quantity) {
+        refreshProductCatalog();
         Product product = findProductById(productId);
         if (product == null) {
             System.out.println("Product with ID " + productId + " does not exist.");
@@ -283,13 +396,43 @@ public class EcommerceService {
             return false;
         }
 
+        // Get latest stock from database if available
+        int availableStock = product.getQuantity();
+        try {
+            int liveStock = productDAO.getStock(product.getId());
+            if (liveStock >= 0) {
+                availableStock = liveStock;
+                product.setStock(liveStock);
+            }
+        } catch (SQLException ignored) {
+        }
+
+        int currentQtyInCart = cart.getQuantity(product.getId());
+        int requestedTotal = currentQtyInCart + quantity;
+
+        if (requestedTotal > availableStock) {
+            System.out.println("Cannot add to cart: Requested quantity exceeds available stock ("
+                    + availableStock + " available).");
+            return false;
+        }
+
+        if (isLoggedIn()) {
+            try {
+                cartDAO.addToCart(currentUser.getUserId(), product.getId(), quantity);
+            } catch (SQLException e) {
+                System.out.println("Failed to save cart item to database.");
+                e.printStackTrace();
+                return false;
+            }
+        }
+
         boolean success = cart.addItem(product, quantity);
         if (success) {
             System.out.println("Added " + quantity + " x " + product.getName() + " to your cart.");
             return true;
         } else {
             System.out.println("Cannot add to cart: Requested quantity exceeds available stock ("
-                    + product.getQuantity() + " available).");
+                    + availableStock + " available).");
             return false;
         }
     }
@@ -299,6 +442,15 @@ public class EcommerceService {
         if (cart.isEmpty()) {
             System.out.println("Your cart is already empty.");
             return;
+        }
+
+        if (isLoggedIn()) {
+            try {
+                cartDAO.removeFromCart(currentUser.getUserId(), productId);
+            } catch (SQLException e) {
+                System.out.println("Failed to remove cart item from database.");
+                e.printStackTrace();
+            }
         }
 
         boolean removed = cart.removeItem(productId);
@@ -311,6 +463,9 @@ public class EcommerceService {
 
     // View cart
     public void viewCart() {
+        if (isLoggedIn()) {
+            loadCartFromDatabase(currentUser.getUserId());
+        }
         String name = (currentUser != null) ? currentUser.getFullName() : "Guest";
         cart.displayCart(name);
     }
@@ -327,13 +482,40 @@ public class EcommerceService {
         return otpService;
     }
 
+    public CartDAO getCartDAO() {
+        return cartDAO;
+    }
+
+    public ProductDAO getProductDAO() {
+        return productDAO;
+    }
+
+    public CustomerDAO getCustomerDAO() {
+        return customerDAO;
+    }
+
     // Place order with address and payment method
     public Order placeOrder(String address, String paymentMethod) {
-        return orderService.placeOrder(currentUser, cart, address, paymentMethod);
+        Order order = orderService.placeOrder(currentUser, cart, address, paymentMethod);
+        if (order != null) {
+            refreshProductCatalog();
+        }
+        return order;
     }
 
     // Display order history
     public void displayUserOrderHistory() {
         orderService.displayUserOrderHistory(currentUser);
+    }
+
+    private void loadProductsFromDatabase() {
+        try {
+            productCatalog.clear();
+            productCatalog.addAll(productDAO.getAllProducts());
+            System.out.println("Products loaded from MySQL.");
+        } catch (SQLException e) {
+            System.out.println("Failed to load products from MySQL.");
+            e.printStackTrace();
+        }
     }
 }

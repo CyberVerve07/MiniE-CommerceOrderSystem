@@ -1,85 +1,68 @@
 package com.ecommerce;
 
-import java.util.ArrayList;
+import com.ecommerce.dao.OrderDAO;
+
+import java.sql.SQLException;
 import java.util.Collections;
 import java.util.List;
 
-// Service class handling order placement and history
+// Service class handling order placement and history backed by MySQL
 public class OrderService {
 
-    private final List<Order> orderHistory;
-    private int nextOrderId;
+    private final OrderDAO orderDAO;
 
-    // Constructor initializes order storage and starting order ID
+    // Constructor initializes OrderDAO
     public OrderService() {
-        this.orderHistory = new ArrayList<>();
-        this.nextOrderId = 1001;
+        this.orderDAO = new OrderDAO();
     }
 
-    // Place an order with delivery address and payment method
+    public OrderService(OrderDAO orderDAO) {
+        this.orderDAO = orderDAO;
+    }
+
+    // Place an order with delivery address and payment method using database transaction
     public Order placeOrder(User user, Cart cart, String address, String paymentMethod) {
         if (user == null) {
             System.out.println("You must log in or register before placing an order!");
             return null;
         }
-
         if (cart == null || cart.isEmpty()) {
             System.out.println("Your cart is empty. Add some products before checking out!");
             return null;
         }
 
-        // Validate stock availability for all items before placing order
-        for (Cart.CartItem item : cart.getItems()) {
-            Product product = item.getProduct();
-            if (!product.hasSufficientStock(item.getQuantity())) {
-                System.out.println("Order failed: Insufficient quantity for " + product.getName()
-                        + " (Available Quantity: " + product.getQuantity() + ", Requested: " + item.getQuantity() + ").");
-                System.out.println("Transaction cancelled: No changes made to inventory or cart.");
-                return null;
+        try {
+            Order newOrder = orderDAO.placeOrder(user, cart, address, paymentMethod);
+            if (newOrder != null) {
+                cart.clear();
+                System.out.println("Order placed successfully! Thank you for shopping with us.");
+                newOrder.printOrderSummary();
+                return newOrder;
             }
+        } catch (SQLException e) {
+            System.out.println("Order failed: " + e.getMessage());
+            System.out.println("Transaction cancelled: No changes made to inventory or cart.");
         }
-
-        // Deduct inventory and prepare order items
-        List<Order.OrderItem> orderItems = new ArrayList<>();
-        for (Cart.CartItem item : cart.getItems()) {
-            Product product = item.getProduct();
-            product.reduceStock(item.getQuantity());
-            orderItems.add(new Order.OrderItem(product.getId(), product.getName(), item.getQuantity(), product.getPrice()
-            ));
-        }
-
-        // Create and save confirmed order
-        double totalBill = cart.getTotalAmount();
-        String finalAddress = (address == null || address.trim().isEmpty()) ? "Standard Delivery" : address.trim();
-        String finalPayment = (paymentMethod == null || paymentMethod.trim().isEmpty()) ? "Cash on Delivery" : paymentMethod.trim();
-
-        Order newOrder = new Order(nextOrderId++, user.getUserId(), user.getFullName(), finalAddress, finalPayment, orderItems, totalBill);
-        orderHistory.add(newOrder);
-
-        // Clear cart after checkout
-        cart.clear();
-
-        System.out.println("Order placed successfully! Thank you for shopping with us.");
-        newOrder.printOrderSummary();
-        return newOrder;
+        return null;
     }
 
     // Overloaded placeOrder without custom address/payment
     public Order placeOrder(User user, Cart cart) {
-        return placeOrder(user, cart, "Standard Address", "Cash on Delivery");
+        return placeOrder(user, cart, "Standard Delivery", "Cash on Delivery");
     }
 
-    // Get list of orders for a user ID
+    // Get list of orders for a user ID from MySQL
     public List<Order> getOrdersByUserId(int userId) {
-        List<Order> result = new ArrayList<>();
-        for (Order order : orderHistory) {
-            if (order.getUserId() == userId) {result.add(order);
-            }
+        try {
+            return orderDAO.getOrdersByCustomerId(userId);
+        } catch (SQLException e) {
+            System.out.println("Unable to fetch order history from database.");
+            e.printStackTrace();
+            return Collections.emptyList();
         }
-        return result;
     }
 
-    // Display order history of user
+    // Display order history of user from MySQL
     public void displayUserOrderHistory(User user) {
         if (user == null) {
             System.out.println("Please log in to view your order history.");
@@ -101,18 +84,26 @@ public class OrderService {
             System.out.println();
         }
     }
+
     // Get all orders in system
     public List<Order> getAllOrders() {
-        return Collections.unmodifiableList(orderHistory);
+        try {
+            return orderDAO.getAllOrders();
+        } catch (SQLException e) {
+            System.out.println("Unable to fetch all orders from database.");
+            e.printStackTrace();
+            return Collections.emptyList();
+        }
     }
 
     // Find order by order ID
     public Order findOrderById(int orderId) {
-        for (Order order : orderHistory) {
-            if (order.getOrderId() == orderId) {
-                return order;
-            }
+        try {
+            return orderDAO.getOrderById(orderId);
+        } catch (SQLException e) {
+            System.out.println("Unable to fetch order from database.");
+            e.printStackTrace();
+            return null;
         }
-        return null;
     }
 }
