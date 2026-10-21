@@ -31,7 +31,6 @@ public class CartItem {
             throw new IllegalArgumentException("Quantity must be greater than zero"
             );
         }
-
         this.quantity = quantity;
     }
 

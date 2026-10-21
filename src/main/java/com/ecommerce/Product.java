@@ -1,118 +1,121 @@
 package com.ecommerce;
 
-/**
- * Product class represents an item available for purchase in the store.
- * It holds details like product ID, name, price, and current stock level.
- */
+// Product entity class representing store inventory
 public class Product {
 
     private int id;
     private String name;
     private double price;
-    private int stock;
+    private int quantity;
+    private double rating;
+    private int reviewCount;
 
-    /**
-     * Parameterized constructor to initialize a product.
-     *
-     * @param id    Unique identifier for the product
-     * @param name  Display name of the product
-     * @param price Unit price of the product
-     * @param stock Available quantity in the warehouse
-     */
-    public Product(int id, String name, double price, int stock) {
+    // Constructor with rating and review count
+    public Product(int id, String name, double price, int quantity, double rating, int reviewCount) {
         this.id = id;
         this.name = name;
         this.price = price;
-        this.stock = stock;
+        this.quantity = quantity;
+        this.rating = rating;
+        this.reviewCount = reviewCount;
     }
-    // End of Product constructor - sets up initial product state.
 
-    /**
-     * Checks if requested quantity is available in stock.
-     *
-     * @param quantity The quantity customer wants to purchase
-     * @return true if stock is sufficient, false otherwise
-     */
-    public boolean hasSufficientStock(int quantity) {
-        return this.stock >= quantity && quantity > 0;
+    // Overloaded constructor with default review count
+    public Product(int id, String name, double price, int quantity, double rating) {
+        this(id, name, price, quantity, rating, 50);
     }
-    // End of hasSufficientStock - validates quantity against available stock.
 
-    /**
-     * Deducts quantity from available stock when an order is placed.
-     *
-     * @param quantity Number of units to deduct
-     */
-    public void reduceStock(int quantity) {
-        if (hasSufficientStock(quantity)) {
-            this.stock -= quantity;
+    // Overloaded constructor with default rating
+    public Product(int id, String name, double price, int quantity) {
+        this(id, name, price, quantity, 4.0, 20);
+    }
+
+    // Check if sufficient quantity is in stock
+    public boolean hasSufficientStock(int reqQty) {
+        return this.quantity >= reqQty && reqQty > 0;
+    }
+
+    // Reduce product stock after order is placed
+    public void reduceStock(int reqQty) {
+        if (hasSufficientStock(reqQty)) {
+            this.quantity -= reqQty;
         } else {
-            throw new IllegalArgumentException("Cannot reduce stock: insufficient quantity available.");
+            throw new IllegalArgumentException("Insufficient quantity available.");
         }
     }
-    // End of reduceStock - securely reduces product inventory.
 
-    /**
-     * Adds units back to stock (e.g. for restock or order cancellation).
-     *
-     * @param quantity Number of units to add
-     */
-    public void addStock(int quantity) {
-        if (quantity > 0) {
-            this.stock += quantity;
+    // Restock product quantity
+    public void addStock(int reqQty) {
+        if (reqQty > 0) {
+            this.quantity += reqQty;
         }
     }
-    // End of addStock - increases product stock count.
 
-    // --- Standard Getters and Setters ---
+    // Getters and Setters
 
     public int getId() {
         return id;
     }
-    // End of getId getter.
 
     public void setId(int id) {
         this.id = id;
     }
-    // End of setId setter.
 
     public String getName() {
         return name;
     }
-    // End of getName getter.
 
     public void setName(String name) {
         this.name = name;
     }
-    // End of setName setter.
 
     public double getPrice() {
         return price;
     }
-    // End of getPrice getter.
 
     public void setPrice(double price) {
         this.price = price;
     }
-    // End of setPrice setter.
+
+    public int getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(int quantity) {
+        this.quantity = quantity;
+    }
 
     public int getStock() {
-        return stock;
+        return quantity;
     }
-    // End of getStock getter.
 
     public void setStock(int stock) {
-        this.stock = stock;
+        this.quantity = stock;
     }
-    // End of setStock setter.
 
-    /**
-     * Formats product info for clean console display.
-     */
+    public double getRating() {
+        return rating;
+    }
+
+    public void setRating(double rating) {
+        this.rating = rating;
+    }
+
+    public int getReviewCount() {
+        return reviewCount;
+    }
+
+    public void setReviewCount(int reviewCount) {
+        this.reviewCount = reviewCount;
+    }
+
+    // Formatted rating string for display
+    public String getRatingDisplay() {
+        return String.format("%.1f/5.0 (%d reviews)", rating, reviewCount);
+    }
+
     @Override
     public String toString() {
-        return String.format("[ID: %-3d] %-25s | Price: ₹%-8.2f | Available Stock: %-4d",
-                id, name, price, stock);
+        return String.format("%-4d %-18s %-12.2f %-10d %s", id, name, price, quantity, getRatingDisplay());
     }
-    // End of toString - formats product details for console printing.
 }
