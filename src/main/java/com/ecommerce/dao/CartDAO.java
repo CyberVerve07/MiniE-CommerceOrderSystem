@@ -20,8 +20,7 @@ public class CartDAO {
     // Retrieve all cart items for a given customer joined with product details
     public List<Cart.CartItem> getCartByCustomerId(int customerId) throws SQLException {
         List<Cart.CartItem> items = new ArrayList<>();
-        String sql = "SELECT c.cart_id, c.customer_id, c.product_id, c.quantity, "
-                + "p.name, p.price, p.stock_quantity, p.rating, p.review_count "
+        String sql = "SELECT c.cart_id, c.customer_id, c.product_id, c.quantity, " + "p.name, p.price, p.stock_quantity, p.rating, p.review_count "
                 + "FROM cart c "
                 + "JOIN products p ON c.product_id = p.product_id "
                 + "WHERE c.customer_id = ?";

@@ -11,7 +11,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
+//Fully Business Logic Layer (BLL) for the e-commerce application, managing products, users, cart, and orders. It interacts with DAOs for database operations and provides methods for user registration
+// , login, product management, cart operations, and order placement.
 // Core service class managing catalog, users, cart, and order service
 public class EcommerceService {
 
